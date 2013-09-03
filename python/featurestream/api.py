@@ -22,18 +22,16 @@ class Stream(object):
 	stream_id = None
 	endpoint = ''
 	session = None
-	learner = None
-	target = None
+	targets = None
 	
-	def __init__(self, stream_id, learner, target, endpoint):
-		self.learner = learner
-		self.target = target
+	def __init__(self, stream_id, targets, endpoint):
+		self.targets = targets
 		self.endpoint = endpoint
 		self.stream_id = stream_id
 		self.session = requests.Session()
 
 	def __repr__(self):
-		return 'Stream[stream_id='+str(self.stream_id)+', learner='+self.learner+', target='+self.target+', endpoint='+self.endpoint+']'
+		return 'Stream[stream_id='+str(self.stream_id)+', targets='+str(self.targets)+', endpoint='+self.endpoint+']'
 
 	def close(self):
 		'''
@@ -109,36 +107,27 @@ class Stream(object):
 			if (len(events)>0):
 				self.train_batch(events)
 
-	def predict(self, event, types={}):
+	def predict(self, event, predict_full=False, types={}):
 		'''
 		 POST /{stream_id}/predict
-		 predict the target field from the event
+		 predict the target fields from the event
 		 payload is the event to predict with
 		 returns a prediction JSON object with 'prediction' field
 		'''
 		full_event = to_full_event(event,types)
-		r=self.session.post(self.endpoint+'/'+str(self.stream_id)+'/predict',data=json.dumps(full_event),headers={'Content-type': 'application/json'})
+		params = {'predict_full':predict_full}
+		r=self.session.post(self.endpoint+'/'+str(self.stream_id)+'/predict',params=params,data=json.dumps(full_event),headers={'Content-type': 'application/json'})
 		if (r.status_code != 200):
 			print 'error:',r.text
 			return
 		return r.json()
 	
 	def predict_full(self, event, types={}):
-		'''
-		 POST /{stream_id}/predict_full
-		 predict the target field from the event
-		 payload is the event to predict with
-		 returns a prediction JSON object with 'prediction' field, which is usually a vector or map
-		'''
-		full_event = to_full_event(event,types)
-		r=self.session.post(self.endpoint+'/'+str(self.stream_id)+'/predict_full',data=json.dumps(full_event),headers={'Content-type': 'application/json'})
-		if (r.status_code != 200):
-			print 'error:',r.text
-			return
-		res= r.json()
-		# add anomaly value if target present
-		if self.target in event:
-			res['anomaly']=sum([y for (x,y) in res['prediction'].items() if x!=event[self.target]])
+		res = self.predict(event, predict_full=True, types=types)
+		# add anomaly value if targets present
+#		for t in self.targets:
+#			if t in event and t in res:
+#				res[t]['anomaly']=sum([y for (x,y) in res[t]['prediction'].items() if x!=event[t]])
 		return res
 
 	def transform(self, event, types={}):
@@ -219,54 +208,25 @@ class Stream(object):
 		r=self.session.get(self.endpoint+'/'+str(self.stream_id)+'/clear_stats')
 		if (r.status_code != 200):
 			print 'error:',r.text
-			
 
-	def check(self):
-		# do some checks
-		stats = self.info()
-		# 1) target leak: if feature_importances==feature_importances_full and |feature_importances|==1
-		if 'feature_importances' in stats:
-			fi=stats['feature_importances'].keys()
-			fi_full=stats['feature_importances_full'].keys()
-			if len(fi)==1 and fi[0]==fi_full[0]:
-				print 'possible feature leak:',fi[0]
-
-class ClusteringStream(Stream):
-
-	def __init__(self, stream_id, endpoint):
-		super(ClusteringStream, self).__init__(stream_id, 'clustering', None, endpoint)
-	
-	def __repr__(self):
-		return 'MungiClusteringStream[stream_id='+str(self.stream_id)+', learner='+self.learner+', endpoint='+self.endpoint+']'
-
-	def get_clusters(self,k=None):
+	def related_fields(self, target, k=5):
 		'''
-		 GET /{stream_id}/clustering/get_clusters
-		 gets k centroids
-		 params: 
-		 k: number of centroids to return, if not specified, returns all the current centroids
+		 GET /{stream_id}/related_fields
+		 returns the k variables most related to the target variable, ordered by decreasing relevance
+		 if k=-1, return all variables
 		'''
-		params={'k':k}
-		r=self.session.get(self.endpoint+'/'+str(self.stream_id)+'/clustering/get_clusters',params=params)
-		if (r.status_code != 200):
-			print 'error:',r.text
-			return;
-		return r.json()
-	
-	def closest_centroid(self, event, types={}):
-		'''
-		 POST /{stream_id}/clustering/closest_centroid
-		 returns the closest centroid to the given point
-		'''
-		full_event = to_full_event(event,types)
-		r=self.session.post(self.endpoint+'/'+str(self.stream_id)+'/clustering/closest_centroid',data=json.dumps(full_event),headers={'Content-type': 'application/json'})
+		params={'target':target}
+		r=self.session.get(self.endpoint+'/'+str(self.stream_id)+'/related_fields',params=params)
 		if (r.status_code != 200):
 			print 'error:',r.text
 			return
-		return r.json()
+		features = r.json()
+		# extract top k
+		top_features = sorted(features.items(), key=lambda (x,y):y, reverse=True)[:k]
+		return top_features
 
 ACCESS = "your_access_key"
-ENDPOINT = 'http://107.22.187.28:8088/mungio/api'
+ENDPOINT = 'http://107.22.214.137:8088/mungio/api'
 
 def set_endpoint(endpoint):
 	global ENDPOINT
@@ -305,38 +265,36 @@ def get_stream(stream_id, endpoint=None):
 		print 'error:',r.text
 		return;
 	j = r.json()
-	learner = j['learnerType']
-	target = j['target']
+	targets = j['targets']
 
-	return _get_stream_obj(stream_id, learner, target, endpoint)
+	return Stream(stream_id, targets, endpoint)
 
-def _get_stream_obj(stream_id, learner, target, endpoint):
-	if learner == 'clustering':
-		return ClusteringStream(stream_id, endpoint)
-	else:
-		return Stream(stream_id, learner, target, endpoint)
-	
-def start_stream(learner=None, target=None, access=None, endpoint=None):
+def start_stream(targets={}, access=None, endpoint=None):
 	'''
-	 GET /start_stream
+	 POST /start_stream
 	 start a new stream
 	 params: 
-	 target = target attribute to predict
 	 access = access key
-	 learner = {rf_classifier,rf_regressor, etc.}
+	 body:
+	 targets = map from targets to types, eg {'value':'NUMERIC', 'spam':'CATEGORIC'}
 	 returns streamId
 	'''
 	if access is None:
 		access = ACCESS
 	if endpoint is None:
 		endpoint = ENDPOINT
-	params={'target':target,'learner':learner,'access':access}
-	print 'starting stream with params =', params
-	r=requests.get(endpoint+'/start_stream',params=params)
+
+	# remap targets list to longer form
+	full_targets = []
+	for target,target_type in targets.items():
+		full_targets.append({'name':target,'type':target_type})
+    
+	params={'access':access}
+	r=requests.post(endpoint+'/start_stream',params=params,data=json.dumps(full_targets),headers={'Content-type': 'application/json'})
 	if (r.status_code != 200):
 		print 'error:',r.text
 		return;
 	j=r.json()
 	stream_id = j['streamId']
 
-	return _get_stream_obj(stream_id, learner, target, endpoint)
+	return Stream(stream_id, targets, endpoint)
