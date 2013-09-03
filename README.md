@@ -3,40 +3,56 @@ The initial product at featurestream.io is a service that consumes JSON data and
 # Getting started
 
 The following example opens a stream, asynchronously adds some events from a csv file, and retrieves a prediction. Clone featurestream-client: `git clone https://github.com/featurestream/featurestream-client.git` and load up ipython (or python/your favorite python interpreter).
+
 ```
 featurestream-client/python $ ipython
 ```
+
 Import the library and give it your access key:
-```
+
+```python
 import featurestream as fs
 fs.set_access('your_access_key')
 ```
+
 Start a new stream:
-```
+
+```python
 stream = fs.start_stream(targets={'41':'CATEGORIC','40':'NUMERIC'})
 ```
+
 This should try to create a stream with two targets, one for column `41` with categoric type and one for column `40` with numeric type. Check that the stream was created successfully:
-```
+
+```python
 >>> stream
 Stream[stream_id=3259584574533090801, targets={'40': 'NUMERIC', '41': 'CATEGORIC'}, endpoint=http://107.22.214.137:8088/mungio/api]
 ```
+
 A stream is created by calling `start_stream(targets)` where `targets` is a map of target names to their types, either CATEGORIC or NUMERIC at present. Each stream is uniquely identified by its `stream_id`. If you close your python console or lose the stream handle, you can call `get_stream(stream_id)` to retrieve the stream object.
-```
+
+```python
 >>> stream.stream_id
 3259584574533090801L
 ```
+
 We're going to load some events from a CSV file. Import the `featurestream.csv` library:
-``
+
+```python
 import featurestream.csv as csv
+
 ```
+
 Get an iterator of events from a csv file (see below for more details on this):
-```
+
+```python
 events = csv.csv_iterator('../resources/KDDTrain_1Percent.csv')
 ```
+
 The parser automatically tries to infer types based on a sample of the file; in this case we don't want to change its type inference; see later for how to do this and more advanced use. In this case, since the CSV file has no header, the parser creates variable names `0,1,2,3,...` according to the column numbers.
 
 Look at the first event; we'll use this later.
-```
+
+```python
 >>> e = events.next()
 >>> e
 {'0': 0.0,
@@ -52,43 +68,54 @@ Look at the first event; we'll use this later.
  '8': 0.0,
  '9': 0.0}
 ```
+
 Events are simple JSON maps `{'name1':value1, ..., 'name_k':value_k}`. If `value` is enclosed in quotes then it is treated as a categoric type, otherwise it is treated as numeric type. For example `event={'some_numeric_val':12.1, 'some_categoric_val':'True', 'numeric_as_categoric':'12.1'}`. You can also specify explicit types if you want; see `api.py` for further documentation. The engine also supports other types including textual and datetime - TODO describe this.
 
 Feed the iterator asynchronously into the stream:
-```
+
+```python
 t=stream.train_iterator(events, batch=200)
 ```
+
 The object `t` gives you access to the training process (see below for more details):
-```
+
+```python
 >>> t
 AsyncTrainer[stream_id=5462813263693773231, is_running=True, train_count=1600, error_count=0, batch=200]
 ```
+
 Wait for the stream to consume some (but not all!) of the events (almost all the time is spent transferring data, particularly since the servers are in the `us-east-1` AWS region currently).
 
 See if it predicts one of the original events correctly:
-```
+
+```python
 >>> stream.predict(e)
 {'40': 0.003188828132738543, '41': 'normal'}
 ```
+
 This returns a simple prediction for each target.
 
 You can also get estimated probabilities for categoric targets by using `predict_full`:
-```
+
+```python
 >>> stream.predict_full(e)
 {'40': 0.003188828132738543,
  '41': {'anomaly': 0.2904094531464688, 'normal': 0.7095905468535312}}
 ```
 
 Featurestream's engine is very good at handling missing values, or noisy data. In particular, for missing values, it can `integrate them out` to get predictions. For example, the following (predicting with the empty event) returns the distribution of the entire stream:
-```
+
+```python
 stream.predict_full({})
 {u'40': 0.12086729519725474,
  u'41': {'anomaly': 0.47712694906960446, 'normal': 0.5228730509303956}}
 ```
+
 So, about 47.7% of events had variable 41 as 'anomaly' and 52.3% as 'normal', and the average value of variable '40' was 0.12. In the future, we can allow returning more full values for numeric targets, including distributions. The ability to leave out missing values makes featurestream very powerful for handling a wide range of real-life data sources.
 
 Examine which variables are most related to a target variable:
-```
+
+```python
 >>> stream.related_fields('41')
 [('3', 0.3023629030991835),
  ('2', 0.291699785669557),
@@ -99,14 +126,18 @@ Examine which variables are most related to a target variable:
 This returns a distribution over all variables, summing to 1, which describes how strongly each variable contributes to predicting the value of the target variable. This allows you to understand more about the structure of your data. By default, it returns the top 5 variables but you can change this by passing the argument `k=10` (for the top 10) or `k=-1` (for all fields).
 
 Examine the stream statistics for one of the targets:
-```
+
+```python
 stream.get_stats()['41']
 ```
+
 The section about stats below explains what these statistics represent. Featurestream calculates these statistics without you having to do k-fold cross-validation, training/test set splits, and so on. Furthermore, they are computed in near real-time as your stream is ingested. So, how did we do so far?
-```
+
+```python
 >>> stream.get_stats()['41']['accuracy']
 0.8556
 ```
+
 Pretty good, we hope!
 
 We hope this example gives you a flavor of what featurestream.io can do for you. You've just scratched the surface! See below for some more details about the calls and objects used above, and more information. We will also be updating this document as we improve the service and add more functionality. We'd love to get some more use case examples. Please say [hello@featurestream.io](hello@featurestream.io)
@@ -114,8 +145,8 @@ We hope this example gives you a flavor of what featurestream.io can do for you.
 
 # CSV and ARFF files
 CSV and ARFF files can be handled using modules `featurestream.csv` and `featurestream.arff`, which each produce an iterator of events.
-```
-#!python
+
+```python
 import featurestream as fs
 import featurestream.csv as csv
 import featurestream.arff as arff
@@ -131,12 +162,12 @@ events = arff.arff_iterator('../resources/iris.arff')
 for event in events:
   stream.train(event)
 ```
+
 The ARFF iterator reads the types from the ARFF header. The CSV iterator takes a sample of the data (1000 lines by default) and uses that to try to infer types. Remember that you need to regenerate (or clone) the iterator if you want to run through it again later.
 
 A more efficient way of processing an iterator is by using `stream.train_iterator(iterator, async=True, batch=100)`, which takes an iterator and two optional arguments: `async` if you want to train asynchronously in another thread, and `batch` which sets the batch size. This returns an `AsyncTrainer` object you can use to query the progress.
 
-```
-#!python
+```python
 In [20]: stream = fs.start_stream(learner='rf_classifier', target='41',endpoint=master)
 starting stream with params = {'access': 'your_access_key', 'learner': 'rf_classifier', 'target': '41'}
 
@@ -177,8 +208,7 @@ t.join()
 
 A third alternative is to directly use `stream.train_batch(events,batch=100)`, which takes a list of events and an optional batch size parameter (to avoid many round trips to the server).
 
-```
-#!python
+```python
 events = csv.csv_iterator('../resources/KDDTrain_1Percent.csv')
 stream.train_batch(list(events))
 ```
@@ -191,8 +221,7 @@ You could also stream through some events to test the model; see the section `cl
 # transforming JSON events
 Suppose you receive JSON events with various nested fields and you want to extract a particular set of fields to use as events. `featurestream.transform` provides a simple way of doing this, and allows building pipelines of event transformers. Here's an example of how to use the `ExtractFieldsTransform` to extract two fields `interaction.content` and `salience.content.sentiment` (from the datasift example). The path to each field is specified using `[<fieldname>][<fieldname>]...` and note the new field name it is mapped to.
 
-```
-#!python
+```python
 import featurestream as fs
 from featurestream.transform import *
 
@@ -206,23 +235,25 @@ In [8]: event = {'status':'active', 'tick':96, 'interaction':{'x':10,'y':13,'con
 In [9]: transform1.transform(event)
 Out[9]: {'content': 'some content', 'sentiment': 3}
 ```
+
 Since a `Transform` object takes an event and returns another event, you can pipeline them using `TransformPipeline`:
-```
-#!python
+
+```python
 transform1 = ExtractFieldsTransform(mapping)
 transform2 = MyTransform(...)
 pipeline = TransformPipeline([transform1,transform2])
 for event in events:
     stream.train(pipeline.transform(event))
 ```
+
 This is especially useful for dealing with data from streams, such as twitter.
 
 # stats
 Streams keep track of various statistics for each target, which can be examined with `stream.get_stats()`. They differ depending on the type of the target.
 
 For categoric targets:
-```
-#!python
+
+```python
 {
 # the overall accuracy so far
 'accuracy': 0.816,
@@ -256,9 +287,11 @@ For categoric targets:
 'type':'classification'
 }
 ```
+
 For numeric targets:
-```
-`{
+
+```python
+{
 # the pearson correlation coefficient
 # http://en.wikipedia.org/wiki/Pearson_product-moment_correlation_coefficient
 'correlation_coefficient': 0.749853117443013205,
@@ -277,8 +310,8 @@ For numeric targets:
 
 ## clear_stats()
 You can clear the stats for a stream by calling `stream.clear_stats()`. For a fun example, try testing a classifier on its training set to see if the result improves (not a recommended methodology!).
-```
-#!python
+
+```python
 import featurestream as fs
 import featurestream.csv as csv
 > stream = fs.start_stream(targets={'41':'CATEGORIC'})
@@ -299,11 +332,14 @@ The method `stream.get_info()` will return more structural information about the
 Here are two archetypal examples:
 
 ## KDDCUP example
-```
-#!bash
-wget http://kdd.ics.uci.edu/databases/kddcup99/kddcup.data.gz
+Download the file
 
-#!python
+```
+wget http://kdd.ics.uci.edu/databases/kddcup99/kddcup.data.gz
+```
+Load into featurestream
+
+```python
 import featurestream as fs
 import featurestream.csv as csv
 
@@ -316,10 +352,10 @@ stream.get_stats()
 ## forest covertype
 Note: the csv parser we use infers variables that have a small number of numeric values, such as binary variables, as having numeric type. There is nothing wrong with this, as the learner will still build a good model. In a future release, we will automate the handling of this, but in the meantime you can force the type detection of the csv parser as in the example below by including `{variable_name:'1'}` in the `types` argument.
 ```
-#!bash
 wget http://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz
+```
 
-#!python
+```python
 import featurestream as fs
 import featurestream.csv as csv
 
@@ -390,12 +426,14 @@ stream.get_stats()
 ```
 
 # scikit-learn integration
+Warning: this is experimental!
+
 The module `featurestream.sklearn` provides basic integration with scikit-learn, by providing classes `FeatureStreamClassifier, FeatureStreamRegressor, FeatureStreamCluster` implementing `BaseEstimator` and other interfaces. This should enable using mostly all the examples in scikit learn with these classes. Here are some examples, see http://scikit-learn.org/dev/datasets/index.html for more datasets.
 
 ## iris dataset
 See http://scikit-learn.org/dev/modules/generated/sklearn.datasets.load_iris.html#sklearn.datasets.load_iris
-```
-#!python
+
+```python
 from featurestream.sklearn import *
 from sklearn.datasets import load_iris
 data = load_iris() # get the dataset
@@ -408,8 +446,7 @@ clf.fit(X,y) # train
 
 ## digits dataset
 
-```
-#!python
+```python
 import pylab as pl
 from sklearn import datasets,metrics
 from featurestream.sklearn import *
