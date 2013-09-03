@@ -1,48 +1,115 @@
-Featurestream.io is a service that consumes streams of JSON events and provides a simple prediction API. We will mostly use the python library in this guide; the REST API is described at the end. We'll be updating this document we add more functionality. Please send any comments or questions to [hello@featurestream.io](mailto:hello@featurestream.io)
+The initial product at featurestream.io is a service that consumes JSON data and provides a simple prediction API. We will use the python library in this guide. We'll be updating this document we add more functionality, so please subscribe to changes if you're interested. If you have any problems, comments or questions, contact us at [hello@featurestream.io](mailto:hello@featurestream.io)
 
 # Getting started
 
-Clone featurestream-client: `git clone git@github.com:featurestream/featurestream-client.git`  and go to the python folder:
+The following example opens a stream, asynchronously adds some events from a csv file, and retrieves a prediction. Clone featurestream-client: `git clone https://github.com/featurestream/featurestream-client.git` and load up ipython (or python/your favorite python interpreter).
 ```
-#!python
-featurestream-client/python $ ipython 
-In[1]: import featurestream as fs
-In[2]: fs.set_access('your_access_key')
-In[3]: fs.start_stream(learner='rf_classifier', target='t')
-starting stream with params = {'access': 'your_access_key', 'learner': 'rf_classifier', 'target': 't'}
-Out[3]: Stream[stream_id=4857991548065370648, learner=rf_classifier, target=t, endpoint=http://14-198-ec2-internal.aws.amazon.com:8088]
+featurestream-client/python $ ipython
 ```
-If you see something like the above, then congratulations, you have connected successfully!
-
-The three main objects in the system are events, streams and prediction results.
-
-## Events
-
-Events are simply maps of the format `{'name1':value1, ..., 'name_k':value_k}`. If `value` is enclosed in quotes then it is treated as a string literal, otherwise a numeric value is expected. For example `event={'some_numeric_val':12.1, 'some_categoric_val':'True', 'numeric_as_categoric':'12.1'}`. You can also specify explicit types if you want; see `api.py` for documentation.
-
-## Streams
-
-A stream is created by calling `start_stream(learner,target,access)` where `target` is the name of the target variable you want to predict, `learner` is either `rf_regressor` (if target is numeric) or `rf_classifier` (if target is categoric), and `access` is your access key (see [http://featurestream.io]() if you do not have one).
-
-If you close your python console or lose the stream handle, you can call `get_stream(stream_id)` to retrieve the stream object.
-
-The following example opens a stream, adds some events, and retrieves a prediction.
-
+Import the library and give it your access key:
 ```
-#!python
 import featurestream as fs
-fs.set_access("access_key")
-
-stream = fs.start_stream(learner='rf_classifier', target='t')
-id = stream.stream_id
-stream.train(event={'x':12,'y':4,'t':'foo'})
-stream.predict(event={'x':10,'y':4})
-...
-
-stream = fs.get_stream(id) # reconnect to an existing stream
+fs.set_access('your_access_key')
 ```
-(please note that featurestream is not currently suited to small examples like this, as it is optimized for long-running streams of data, although this will change).
+Start a new stream:
+```
+stream = fs.start_stream(targets={'41':'CATEGORIC','40':'NUMERIC'})
+```
+This should try to create a stream with two targets, one for column `41` with categoric type and one for column `40` with numeric type. Check that the stream was created successfully:
+```
+>>> stream
+Stream[stream_id=3259584574533090801, targets={'40': 'NUMERIC', '41': 'CATEGORIC'}, endpoint=http://107.22.214.137:8088/mungio/api]
+```
+A stream is created by calling `start_stream(targets)` where `targets` is a map of target names to their types, either CATEGORIC or NUMERIC at present. Each stream is uniquely identified by its `stream_id`. If you close your python console or lose the stream handle, you can call `get_stream(stream_id)` to retrieve the stream object.
+```
+>>> stream.stream_id
+3259584574533090801L
+```
+We're going to load some events from a CSV file. Import the `featurestream.csv` library:
+``
+import featurestream.csv as csv
+```
+Get an iterator of events from a csv file (see below for more details on this):
+```
+events = csv.csv_iterator('../resources/KDDTrain_1Percent.csv')
+```
+The parser automatically tries to infer types based on a sample of the file; in this case we don't want to change its type inference; see later for how to do this and more advanced use. In this case, since the CSV file has no header, the parser creates variable names `0,1,2,3,...` according to the column numbers.
 
+Look at the first event; we'll use this later.
+```
+>>> e = events.next()
+>>> e
+{'0': 0.0,
+ '1': 'tcp',
+ '10': 0.0,
+...
+ '4': 491.0,
+ '40': 0.0,
+ '41': 'normal',
+ '5': 0.0,
+ '6': 0.0,
+ '7': 0.0,
+ '8': 0.0,
+ '9': 0.0}
+```
+Events are simple JSON maps `{'name1':value1, ..., 'name_k':value_k}`. If `value` is enclosed in quotes then it is treated as a categoric type, otherwise it is treated as numeric type. For example `event={'some_numeric_val':12.1, 'some_categoric_val':'True', 'numeric_as_categoric':'12.1'}`. You can also specify explicit types if you want; see `api.py` for further documentation. The engine also supports other types including textual and datetime - TODO describe this.
+
+Feed the iterator asynchronously into the stream:
+```
+t=stream.train_iterator(events, batch=200)
+```
+The object `t` gives you access to the training process (see below for more details):
+```
+>>> t
+AsyncTrainer[stream_id=5462813263693773231, is_running=True, train_count=1600, error_count=0, batch=200]
+```
+Wait for the stream to consume some (but not all!) of the events (almost all the time is spent transferring data, particularly since the servers are in the `us-east-1` AWS region currently).
+
+See if it predicts one of the original events correctly:
+```
+>>> stream.predict(e)
+{'40': 0.003188828132738543, '41': 'normal'}
+```
+This returns a simple prediction for each target.
+
+You can also get estimated probabilities for categoric targets by using `predict_full`:
+```
+>>> stream.predict_full(e)
+{'40': 0.003188828132738543,
+ '41': {'anomaly': 0.2904094531464688, 'normal': 0.7095905468535312}}
+```
+
+Featurestream's engine is very good at handling missing values, or noisy data. In particular, for missing values, it can `integrate them out` to get predictions. For example, the following (predicting with the empty event) returns the distribution of the entire stream:
+```
+stream.predict_full({})
+{u'40': 0.12086729519725474,
+ u'41': {'anomaly': 0.47712694906960446, 'normal': 0.5228730509303956}}
+```
+So, about 47.7% of events had variable 41 as 'anomaly' and 52.3% as 'normal', and the average value of variable '40' was 0.12. In the future, we can allow returning more full values for numeric targets, including distributions. The ability to leave out missing values makes featurestream very powerful for handling a wide range of real-life data sources.
+
+Examine which variables are most related to a target variable:
+```
+>>> stream.related_fields('41')
+[('3', 0.3023629030991835),
+ ('2', 0.291699785669557),
+ ('1', 0.19462411700150317),
+ ('4', 0.1298967249165924),
+ ('32', 0.018188997892038854)]
+```
+This returns a distribution over all variables, summing to 1, which describes how strongly each variable contributes to predicting the value of the target variable. This allows you to understand more about the structure of your data. By default, it returns the top 5 variables but you can change this by passing the argument `k=10` (for the top 10) or `k=-1` (for all fields).
+
+Examine the stream statistics for one of the targets:
+```
+stream.get_stats()['41']
+```
+The section about stats below explains what these statistics represent. Featurestream calculates these statistics without you having to do k-fold cross-validation, training/test set splits, and so on. Furthermore, they are computed in near real-time as your stream is ingested. So, how did we do so far?
+```
+>>> stream.get_stats()['41']['accuracy']
+0.8556
+```
+Pretty good, we hope!
+
+We hope this example gives you a flavor of what featurestream.io can do for you. You've just scratched the surface! See below for some more details about the calls and objects used above, and more information. We will also be updating this document as we improve the service and add more functionality. We'd love to get some more use case examples. Please say [hello@featurestream.io](hello@featurestream.io)
 
 
 # CSV and ARFF files
@@ -54,10 +121,10 @@ import featurestream.csv as csv
 import featurestream.arff as arff
 
 # CSV
-stream = fs.start_stream(learner='rf_classifier', target='41')
+stream = fs.start_stream(targets={'41':'CATEGORIC'})
 events = csv.csv_iterator('../resources/KDDTrain_1Percent.csv')
 # ARFF
-stream = fs.start_stream(learner='rf_classifier', target='class')
+stream = fs.start_stream(targets={'class':'CATEGORIC'})
 events = arff.arff_iterator('../resources/iris.arff')
 
 # train on the events
@@ -151,13 +218,11 @@ for event in events:
 This is especially useful for dealing with data from streams, such as twitter.
 
 # stats
-Learners generate various kinds of statistics, which you can examine via `stream.get_stats()`:
+Streams keep track of various statistics for each target, which can be examined with `stream.get_stats()`. They differ depending on the type of the target.
 
+For categoric targets:
 ```
 #!python
-stream = start_stream(learner='rf_classifier', ...)
-...
-> stream.get_stats()
 {
 # the overall accuracy so far
 'accuracy': 0.816,
@@ -190,11 +255,10 @@ stream = start_stream(learner='rf_classifier', ...)
 # the type of stream learner
 'type':'classification'
 }
-
-stream = start_stream(learner='rf_regressor', ...)
-...
-> stream.get_stats()
-{
+```
+For numeric targets:
+```
+`{
 # the pearson correlation coefficient
 # http://en.wikipedia.org/wiki/Pearson_product-moment_correlation_coefficient
 'correlation_coefficient': 0.749853117443013205,
@@ -217,14 +281,14 @@ You can clear the stats for a stream by calling `stream.clear_stats()`. For a fu
 #!python
 import featurestream as fs
 import featurestream.csv as csv
-> stream = fs.start_stream('rf_classifier', target='41')
+> stream = fs.start_stream(targets={'41':'CATEGORIC'})
 > events = list(csv.csv_iterator('../resources/KDDTrain_1Percent.csv'))
 > stream.train_batch(events)
-> stream.get_stats()['accuracy']
+> stream.get_stats()['41']['accuracy']
 0.8750520616409829
 > stream.clear_stats()
 > stream.train_batch(events)
-> stream.get_stats()['accuracy']
+> stream.get_stats()['41']['accuracy']
 0.9541857559350271
 ```
 
@@ -389,64 +453,5 @@ Z = classifier.transform(X)
 # TODO do something with these transformed vectors
 
 ```
-
-# REST API
-
-`GET /start_stream`  
-start a new stream  
-params:  
-target = target attribute to predict  
-access = access key  
-learner = {rf_classifier,rf_regressor, etc.}  
-returns streamId  
-
-`GET /{stream_id}/get_stream`  
- get existing stream details  
- params: stream_id  
- returns stream object  
-
-`POST /{stream_id}/train`  
- train on an event  
- event: event as a JSON list of {name:value} pairs  
- if the value has quotes then it is taken to be a categoric (discrete) attribute  
- otherwise it is parsed as a number and taken to be a numeric (continuous) attribute  
- types: optionally specify a map from names to types  
- where type is one of {NUMERIC,CATEGORIC,DATETIME,TEXT}   
- Example: 
- [{'size':12},{'anomaly':'true'},...]  
- In the above there are 2 attributes: size (numeric) and anomaly (categoric)  
- returns True if event accepted
-
-`POST /{stream_id}/train_batch`  
- train on an list of events  
-
-`POST /{stream_id}/predict`  
- predict the target field from the event  
- payload is the event to predict with  
- returns a prediction JSON object with 'prediction' field  
-
-`POST /{stream_id}/predict_full`  
- predict the target field from the event  
- payload is the event to predict with  
- returns a prediction JSON object with 'prediction' field, which is usually a vector or map  
-
-`POST /{stream_id}/transform`  
- transform the event using whatever internal representation the learner uses  
- not all learners support this method  
- returns a vector  
-
-`GET /{stream_id}/get_stats`  
- gets stats about the current stream
-
-`GET /{stream_id}/clear_stats`  
- clears stats about the current stream
-
-`GET /{stream_id}/get_info`  
- gets info about the current stream  
- returns a stats JSON object
-
-`GET /{stream_id}/get_schema`  
- gets schema for the current stream  
- returns a stats JSON object
 
 
