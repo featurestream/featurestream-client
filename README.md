@@ -2,13 +2,17 @@ The initial product at featurestream.io is a service that consumes JSON data and
 
 # Getting started
 
-The following example opens a stream, asynchronously adds some events from a csv file, and retrieves a prediction. Clone featurestream-client: `git clone https://github.com/featurestream/featurestream-client.git` and load up ipython (or python/your favorite python interpreter).
-
+Clone featurestream-client
 ```
-featurestream-client/python $ ipython
+git clone https://github.com/featurestream/featurestream-client.git
 ```
+The best way to get started is by using the ipython notebook. [Install ipython](http://ipython.org/install.html) and fire up ipython notebook:
+```
+featurestream-client/python $ ipython notebook getting-started.ipynb
+```
+If you don't have ipython or just want to see the example, take a look [here](http://nbviewer.ipython.org/6448149) or see below.
 
-Import the library and give it your access key:
+# Getting started (python)
 
 ```python
 import featurestream as fs
