@@ -141,8 +141,13 @@ The section about stats below explains what these statistics represent. Features
 >>> stream.get_stats()['41']['accuracy']
 0.8556
 ```
-
 Pretty good, we hope!
+
+It's good practice to close the stream after you're done with it.
+
+```python
+stream.close()
+```
 
 We hope this example gives you a flavor of what featurestream.io can do for you. You've just scratched the surface! See below for some more details about the calls and objects used above, and more information. We will also be updating this document as we improve the service and add more functionality. We'd love to get some more use case examples. Please say [hello@featurestream.io](hello@featurestream.io)
 
