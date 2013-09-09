@@ -88,7 +88,8 @@ def csv_iterator(filename, types={}, missing_values=['none','nan','na','n/a','',
 					types[h]=1
 				else:
 					types[h]=0
-	print 'types=',types
+	typemap = {0:'NUMERIC',1:'CATEGORIC'}
+	print 'types=',map(lambda h:(h,typemap[types[h]]),headers)
 
 	return csv2json(filename,has_header,headers,dialect,missing_values,types)
 
