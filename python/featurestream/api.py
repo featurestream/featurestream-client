@@ -59,6 +59,7 @@ class Stream(object):
 		return True
 
 	def train(self, event, types={}):
+#		print 'session cookies=',self.session.cookies
 		'''
 		 POST /{stream_id}/train
 		 train on an event
@@ -238,6 +239,12 @@ def set_access(access):
 	ACCESS = access
 	print 'set access key to',ACCESS
 
+def check_health(endpoint=None):
+	if endpoint is None:
+		endpoint = ENDPOINT
+	r=requests.get(endpoint+'/health')
+	return (r.status_code == 200)
+
 def get_streams(access=None, endpoint=None):
 	if access is None:
 		access = ACCESS
@@ -283,6 +290,10 @@ def start_stream(targets={}, access=None, endpoint=None):
 		access = ACCESS
 	if endpoint is None:
 		endpoint = ENDPOINT
+
+	if (not check_health(endpoint)):
+		print 'error: service health check failed - please contact help@featurestream.io or try later'
+		return
 
 	# remap targets list to longer form
 	full_targets = []
