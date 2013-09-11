@@ -1,4 +1,5 @@
 import json,requests,time
+from requests import ConnectionError
 from async import AsyncTrainer
 from transform import Transform
 
@@ -245,8 +246,11 @@ def set_access(access):
 def check_health(endpoint=None):
 	if endpoint is None:
 		endpoint = ENDPOINT
-	r=requests.get(endpoint+'/health')
-	return (r.status_code == 200)
+	try:
+		r=requests.get(endpoint+'/health')
+		return (r.status_code == 200)
+	except ConnectionError:
+		return False
 
 def get_streams(access=None, endpoint=None):
 	if access is None:
