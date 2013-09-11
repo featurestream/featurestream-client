@@ -24,11 +24,14 @@ class Stream(object):
 	session = None
 	targets = None
 	
-	def __init__(self, stream_id, targets, endpoint):
+	def __init__(self, stream_id, targets, endpoint, cookies):
 		self.targets = targets
 		self.endpoint = endpoint
 		self.stream_id = stream_id
 		self.session = requests.Session()
+		# set any cookies
+		if (cookies is not None):
+			self.session.cookies = cookies
 
 	def __repr__(self):
 		return 'Stream[stream_id='+str(self.stream_id)+', targets='+str(self.targets)+', endpoint='+self.endpoint+']'
@@ -268,13 +271,14 @@ def get_stream(stream_id, endpoint=None):
 		endpoint = ENDPOINT
 	params={}
 	r=requests.get(endpoint+'/'+str(stream_id)+'/get_stream',params=params)
+	cookies = r.cookies
 	if (r.status_code != 200):
 		print 'error:',r.text
 		return;
 	j = r.json()
 	targets = j['targets']
 
-	return Stream(stream_id, targets, endpoint)
+	return Stream(stream_id, targets, endpoint, cookies)
 
 def start_stream(targets={}, access=None, endpoint=None):
 	'''
@@ -302,10 +306,11 @@ def start_stream(targets={}, access=None, endpoint=None):
     
 	params={'access':access}
 	r=requests.post(endpoint+'/start_stream',params=params,data=json.dumps(full_targets),headers={'Content-type': 'application/json'})
+	cookies = r.cookies
 	if (r.status_code != 200):
 		print 'error:',r.text
 		return;
 	j=r.json()
 	stream_id = j['streamId']
 
-	return Stream(stream_id, targets, endpoint)
+	return Stream(stream_id, targets, endpoint, cookies)
