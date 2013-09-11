@@ -231,7 +231,7 @@ class Stream(object):
 		return top_features
 
 ACCESS = "your_access_key"
-ENDPOINT = 'http://107.22.214.137:8088/mungio/api'
+ENDPOINT = 'http://mungio2.elasticbeanstalk.com/api'
 
 def set_endpoint(endpoint):
 	global ENDPOINT
