@@ -1,3 +1,4 @@
+import zlib
 import json,requests,time
 from requests import ConnectionError
 from async import AsyncTrainer
@@ -56,7 +57,8 @@ class Stream(object):
 		 train on an list of events
 		'''
 		full_events=[to_full_event(event,types) for event in events]
-		r=self.session.post(self.endpoint+'/'+str(self.stream_id)+'/train_batch',data=json.dumps(full_events),headers={'Content-type': 'application/json'},timeout=30)
+		data = zlib.compress(json.dumps(full_events))
+		r=self.session.post(self.endpoint+'/'+str(self.stream_id)+'/train_batch',data=data,headers={'Content-type': 'application/json'},timeout=30)
 		if (r.status_code != 200):
 			print 'error:',r.text
 			return False
@@ -78,7 +80,8 @@ class Stream(object):
 		 returns True if event accepted
 		'''
 		full_event = to_full_event(event,types)
-		r=self.session.post(self.endpoint+'/'+str(self.stream_id)+'/train',data=json.dumps(full_event),headers={'Content-type': 'application/json'},timeout=30)
+		data = json.dumps(full_event)
+		r=self.session.post(self.endpoint+'/'+str(self.stream_id)+'/train',data=data,headers={'Content-type': 'application/json'},timeout=30)
 		if (r.status_code != 200):
 			print 'error:',r.text
 			return False
@@ -120,8 +123,9 @@ class Stream(object):
 		 returns a prediction JSON object with 'prediction' field
 		'''
 		full_event = to_full_event(event,types)
+		data = json.dumps(full_event)
 		params = {'predict_full':predict_full}
-		r=self.session.post(self.endpoint+'/'+str(self.stream_id)+'/predict',params=params,data=json.dumps(full_event),headers={'Content-type': 'application/json'})
+		r=self.session.post(self.endpoint+'/'+str(self.stream_id)+'/predict',params=params,data=data,headers={'Content-type': 'application/json'})
 		if (r.status_code != 200):
 			print 'error:',r.text
 			return
@@ -231,7 +235,7 @@ class Stream(object):
 		return top_features
 
 ACCESS = "your_access_key"
-ENDPOINT = 'http://mungio2.elasticbeanstalk.com/api'
+ENDPOINT = 'http://api.featurestream.io/api'
 
 def set_endpoint(endpoint):
 	global ENDPOINT
