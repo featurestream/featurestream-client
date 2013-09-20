@@ -46,9 +46,21 @@ class Stream(object):
 		r=self.session.get(self.endpoint+'/'+str(self.stream_id)+'/stop_stream')
 		if (r.status_code != 200):
 			print 'error:',r.text
-			return
+			return False
 
 		self.session.close()
+		return True
+
+	def checkpoint(self):
+		'''
+		 GET /{stream_id}/checkpoint
+		 checkpoint the stream
+		'''
+		r=self.session.get(self.endpoint+'/'+str(self.stream_id)+'/checkpoint')
+		if (r.status_code != 200):
+			print 'error:',r.text
+			return False
+
 		return True
 
 	def train_batch(self, events, types={}):
@@ -87,7 +99,7 @@ class Stream(object):
 			return False
 		return True
 	
-	def train_iterator(self, it, async=True, trans=Transform(), batch=100):
+	def train_iterator(self, it, async=True, types={}, trans=Transform(), batch=100):
 		'''
 		 trains over the events yielded by the given iterator, 
 		 applying the given transformation to each event.
@@ -110,10 +122,10 @@ class Stream(object):
 			for event in transformed_it:
 				events.append(event)
 				if (len(events)>=batch):
-					self.train_batch(events)
+					self.train_batch(events,types)
 					events = []
 			if (len(events)>0):
-				self.train_batch(events)
+				self.train_batch(events,types)
 
 	def predict(self, event, predict_full=False, types={}):
 		'''
