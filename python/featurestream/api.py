@@ -111,6 +111,9 @@ class Stream(object):
 		if (batch<1):
 			print 'error: batch cannot be < 1'
 			return False
+		if not it:
+			print 'warning: empty iterator passed'
+			return True
 
 		transformed_it = (trans.transform(x) for x in it)
 		if async:
@@ -125,7 +128,8 @@ class Stream(object):
 					self.train_batch(events,types)
 					events = []
 			if (len(events)>0):
-				self.train_batch(events,types)
+				return self.train_batch(events,types)
+			return True
 
 	def predict(self, event, predict_full=False, types={}):
 		'''
@@ -247,7 +251,7 @@ class Stream(object):
 		return top_features
 
 ACCESS = "your_access_key"
-ENDPOINT = 'http://api.featurestream.io/api'
+ENDPOINT = 'http://api.featurestream.io:8088/api'
 
 def set_endpoint(endpoint):
 	global ENDPOINT
