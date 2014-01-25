@@ -4,6 +4,7 @@ import sys
 class AsyncTrainer (threading.Thread):
 	stream = None
 	it = None
+	types = None
 
 	running = True
 	train_count = 0
@@ -11,12 +12,13 @@ class AsyncTrainer (threading.Thread):
 	last_error = None
 	batch = 1
 
-	def __init__(self, stream, it, batch):
+	def __init__(self, stream, it, types, batch):
 		threading.Thread.__init__(self)
 		self.daemon = True
 		self.stream = stream
 		self.it = it
 		self.batch = batch
+		self.types = types
 
 	def __repr__(self):
 		return 'AsyncTrainer[stream_id='+str(self.stream.stream_id)+', is_running='+str(self.running)+', train_count='+str(self.train_count)+', error_count='+str(self.error_count)+', batch='+str(self.batch)+']'
@@ -33,7 +35,7 @@ class AsyncTrainer (threading.Thread):
 					events.append(line)
 					if (len(events) >= self.batch):
 						try:
-							ok = self.stream.train_batch(events)
+							ok = self.stream.train_batch(events,self.types)
 							if not ok:
 								self.error_count += 1
 								self.last_error = ('Error training batch')
@@ -49,7 +51,7 @@ class AsyncTrainer (threading.Thread):
 			# any leftovers
 			if (len(events)>0):
 				try:
-					ok = self.stream.train_batch(events)
+					ok = self.stream.train_batch(events,self.types)
 					if not ok:
 						self.error_count += 1
 						self.last_error = ('Error training batch')

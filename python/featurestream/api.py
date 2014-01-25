@@ -9,7 +9,15 @@ def to_full_event(event,types={}):
 	 converts a simple {name:value} list to a full event to be posted
 	'''
 	data=[]
+	try_decode = False
 	for key,value in event.iteritems():
+		if try_decode:
+			try:
+				key = key.decode()
+				value = value.decode()
+			except UnicodeDecodeError:
+				continue
+
 		if key in types:
 			data.append({'name':key,'value':value, 'type':types[key]})
 		else:
@@ -117,7 +125,7 @@ class Stream(object):
 
 		transformed_it = (trans.transform(x) for x in it)
 		if async:
-			load_thread = AsyncTrainer(self, transformed_it, batch)
+			load_thread = AsyncTrainer(self, transformed_it, types, batch)
 			load_thread.start()
 			return load_thread
 		else:
