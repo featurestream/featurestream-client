@@ -1,4 +1,4 @@
-featurestream.io is a service that consumes JSON events, incrementally builds a predictive model and provides a simple prediction API. It can also do things like anomaly detection. We'll use the python library in this guide.  If you have any problems, comments or questions, contact us at [hello@featurestream.io](mailto:hello@featurestream.io)
+http://featurestream.io is a service that consumes JSON events, incrementally builds a predictive model and provides a simple prediction API. It can also do things like anomaly detection. We'll use the python library in this guide.  If you have any problems, comments or questions, contact us at [hello@featurestream.io](mailto:hello@featurestream.io)
 
 # REST API
 
