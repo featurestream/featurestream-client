@@ -1,4 +1,64 @@
-The initial product at featurestream.io is a service that consumes JSON data and provides a simple prediction API. We will use the python library in this guide. We'll be updating this document we add more functionality, so please subscribe to changes if you're interested. If you have any problems, comments or questions, contact us at [hello@featurestream.io](mailto:hello@featurestream.io)
+featurestream.io is a service that consumes JSON events, incrementally builds a predictive model and provides a simple prediction API. It can also do things like anomaly detection. We'll use the python library in this guide.  If you have any problems, comments or questions, contact us at [hello@featurestream.io](mailto:hello@featurestream.io)
+
+# REST API
+
+We currently expose a REST API at http://api.featurestream.io:8088/api, which supports the following major operations (in addition to a few less interesting ones):
+
+__POST /start_stream___
+
+start a new stream
+
+params: access = access key
+
+body: targets = map from targets to types, eg {'value':'NUMERIC', 'spam':'CATEGORIC'}
+
+returns streamId
+
+__GET /{stream_id}/stop_stream__
+
+close the stream
+
+__POST /{stream_id}/train__
+
+train on an event
+
+body: event as a JSON list of {name:value} pairs
+
+If the value has quotes then it is taken to be a categoric (discrete) attribute
+otherwise it is parsed as a number and taken to be a numeric (continuous) attribute
+types: optionally specify a map from names to types 
+where type is one of {NUMERIC,CATEGORIC,DATETIME,TEXT} 
+
+__POST /{stream_id}/predict__
+
+predict the target fields from the event
+
+body: the JSON event to predict the target fields for
+
+returns a prediction JSON object
+
+__GET /{stream_id}/get_info__
+
+gets info about the current stream
+
+returns a stats JSON object
+
+__GET /{stream_id}/get_schema__
+
+gets schema for the current stream
+
+returns a stats JSON object
+
+__GET /{stream_id}/related_fields__
+
+returns the k variables most related to the target variable, ordered by decreasing relevance. If k=-1, returns all variables.
+
+__GET /{stream_id}/get_stream__
+
+retrieve an existing stream
+
+returns a stream object
+
 
 # Getting started
 
