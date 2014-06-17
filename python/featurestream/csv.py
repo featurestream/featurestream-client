@@ -84,7 +84,7 @@ def csv_iterator(filename, types={}, missing_values=['none','nan','na','n/a','',
 		types = defaultdict(int)
 		for h in headers:
 			if h in types_:
-				if types_[h] == '1':
+				if types_[h] == 1:
 					types[h]=1
 				else:
 					types[h]=0
@@ -93,3 +93,38 @@ def csv_iterator(filename, types={}, missing_values=['none','nan','na','n/a','',
 
 	return csv2json(filename,has_header,headers,dialect,missing_values,types)
 
+def fill_csv_blanks(fs, filename, types={}, missing_values=['none','nan','na','n/a','','?','??','???','none or unspecified','unspecified','unknown']):
+    # redo work to get types
+    types_ = types
+    has_header,headers,dialect=getheaders_dialect(filename)
+    if len(types_) == 0:
+      types=guesstypes(filename,has_header,headers,dialect,missing_values)
+    else:
+      types = defaultdict(int)
+      for h in headers:
+        if h in types_:
+          if types_[h] == 1:
+            types[h]=1
+          else:
+            types[h]=0
+    typemap = {0:'NUMERIC',1:'CATEGORIC'}
+    has_header,headers,dialect = getheaders_dialect(filename)
+    # create stream
+    print 'building model..'
+    stream = fs.start_stream(targets = dict(map(lambda h:(h,typemap[types[h]]), headers)))
+    # create iterator
+    it = csv_iterator(filename,types,missing_values)
+    events = list(it)
+    # train
+    stream.train_batch(events)
+    # fill missing cells
+    print 'new rows..'
+    print headers
+    for e in events: 
+      pred = stream.predict(e)
+      row = map(lambda h:(str(e[h])+'(pred:'+str(pred[h])+')' if h in e else pred[h]), headers)
+      # write out the predicted row
+      print row
+    
+        
+    
